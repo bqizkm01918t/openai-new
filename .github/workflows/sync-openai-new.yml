@@ -1,4 +1,3 @@
-# .github/workflows/sync-openai-new.yml
 name: 🚀 自动同步 calciumion/new-api 到 GHCR
 
 on:
