@@ -1,0 +1,35 @@
+# .github/workflows/sync-openai-new.yml
+name: Sync to GHCR as openai-new
+
+on:
+  workflow_dispatch:  # 支持手动触发
+  schedule:
+    - cron: '0 2 * * *'  # 每天 UTC 时间凌晨 2 点自动同步一次
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write  # 必须授权写入 GHCR
+
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}  # 安全！GitHub 自动提供
+
+      - name: Pull from Docker Hub and Push to GHCR
+        run: |
+          # 拉取原始镜像
+          docker pull calciumion/new-api:latest
+          
+          # 重命名为你想要的名字：openai-new
+          docker tag calciumion/new-api:latest ghcr.io/bqizkm01918t/openai-new:latest
+          
+          # 推送到 GHCR（自动覆盖 latest）
+          docker push ghcr.io/bqizkm01918t/openai-new:latest
+
+      - name: Report success
+        run: echo "✅ Synced to ghcr.io/bqizkm01918t/openai-new:latest"
