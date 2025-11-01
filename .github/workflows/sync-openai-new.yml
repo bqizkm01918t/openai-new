@@ -11,8 +11,6 @@ jobs:
     permissions:
       packages: write  # 必需：允许推送镜像到 GHCR
       contents: write  # 必需：允许更新README文件
-      # 添加删除包的权限
-      packages: delete
 
     steps:
       - name: 🛠️ 准备环境
@@ -42,37 +40,10 @@ jobs:
         id: login
         continue-on-error: false
 
-      - name: 🗑️ 删除GHCR上的所有镜像版本
-        run: |
-          echo "🗑️ 正在删除GHCR上的所有镜像版本..."
-          
-          # 安装gh CLI
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-          sudo apt update
-          sudo apt install gh -y
-          
-          # 登录gh CLI
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-          
-          # 获取所有包版本并删除
-          PACKAGE_ID=$(gh api graphql -f query='query{repository(owner:"${{ github.repository_owner }}", name:"openai-new"){package(name:"openai-new"){id}}}' --jq '.data.repository.package.id')
-          echo "Package ID: $PACKAGE_ID"
-          
-          # 获取所有版本
-          VERSIONS=$(gh api graphql -f query="query{node(id:\"$PACKAGE_ID\"){... on Package{versions(first:100){nodes{id,version}}}}}" --jq '.data.node.versions.nodes[].id')
-          
-          for VERSION_ID in $VERSIONS; do
-            echo "删除版本ID: $VERSION_ID"
-            gh api --method DELETE "/packages/${{ github.repository_owner }}/openai-new/versions/$VERSION_ID" || true
-          done
-          
-          echo "✅ 所有旧版本已删除"
-
       - name: 🗑️ 清理本地缓存
         run: |
           echo "🗑️ 清理本地Docker缓存以确保获取最新镜像..."
-          docker system prune -f
+          docker system prune -af
           docker rmi ghcr.io/bqizkm01918t/openai-new:latest 2>/dev/null || true
           docker rmi calciumion/new-api:latest 2>/dev/null || true
           echo "✅ 清理完成"
@@ -80,7 +51,7 @@ jobs:
       - name: 📦 强制拉取 Docker Hub 上的最新镜像
         run: |
           echo "📦 正在强制拉取最新镜像: calciumion/new-api:latest"
-          # 使用正确的docker pull命令（不支持--no-cache参数）
+          # 使用正确的docker pull命令
           docker pull calciumion/new-api:latest
           echo "✅ 拉取成功！"
           
@@ -89,17 +60,31 @@ jobs:
           echo "源镜像摘要: $SOURCE_DIGEST"
           echo "SOURCE_DIGEST=$SOURCE_DIGEST" >> $GITHUB_ENV
 
+      - name: 🏷️ 使用时间戳创建唯一标签
+        run: |
+          # 生成时间戳标签
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          echo "🏷️ 创建时间戳标签: $TIMESTAMP"
+
       - name: 🏷️ 重命名镜像为 openai-new
         run: |
           echo "🔄 重命名镜像: calciumion/new-api -> ghcr.io/bqizkm01918t/openai-new"
+          # 创建带时间戳的标签
+          docker tag calciumion/new-api:latest ghcr.io/bqizkm01918t/openai-new:${{ env.TIMESTAMP }}
+          # 同时更新latest标签
           docker tag calciumion/new-api:latest ghcr.io/bqizkm01918t/openai-new:latest
           echo "✅ 重命名完成！"
 
       - name: 🚀 推送镜像到 GHCR
         run: |
-          echo "📤 正在推送: ghcr.io/bqizkm01918t/openai-new:latest"
+          echo "📤 正在推送带时间戳的镜像: ghcr.io/bqizkm01918t/openai-new:${{ env.TIMESTAMP }}"
+          docker push ghcr.io/bqizkm01918t/openai-new:${{ env.TIMESTAMP }}
+          
+          echo "📤 正在推送latest标签: ghcr.io/bqizkm01918t/openai-new:latest"
           docker push ghcr.io/bqizkm01918t/openai-new:latest
-          echo "✅ 推送完成！镜像已覆盖更新。"
+          
+          echo "✅ 推送完成！镜像已更新。"
 
       - name: 🧪 验证镜像是否推送成功
         run: |
@@ -154,18 +139,19 @@ jobs:
           - **源镜像**: \`calciumion/new-api:latest\`
           - **同步频率**: 每日自动同步 (北京时间上午 10 点)
           - **源镜像摘要**: ${{ env.SOURCE_DIGEST }}
+          - **当前版本标签**: ${{ env.TIMESTAMP }}
           
           ## 📅 同步记录
           
-          | 同步时间 | 触发方式 | 状态 |
-          |----------|----------|------|
-          | ${{ env.CURRENT_DATE }} | ${{ env.TRIGGER_TYPE }} | ✅ 成功 |
+          | 同步时间 | 触发方式 | 版本标签 | 状态 |
+          |----------|----------|----------|------|
+          | ${{ env.CURRENT_DATE }} | ${{ env.TRIGGER_TYPE }} | ${{ env.TIMESTAMP }} | ✅ 成功 |
           
           ## 🔄 同步流程
           
-          1. 删除GHCR上的所有旧版本镜像
-          2. 清理本地Docker缓存
-          3. 从 Docker Hub 强制拉取最新 \`calciumion/new-api\` 镜像
+          1. 清理本地Docker缓存
+          2. 从 Docker Hub 强制拉取最新 \`calciumion/new-api\` 镜像
+          3. 创建带时间戳的唯一标签
           4. 重新标记为 \`ghcr.io/bqizkm01918t/openai-new\`
           5. 推送到 GitHub Container Registry
           6. 验证镜像是否成功推送
@@ -178,6 +164,13 @@ jobs:
           \`\`\`bash
           # 使用SQLite
           docker run --name new-api -d --restart always -p 3000:3000 -e TZ=Asia/Shanghai -v /home/ubuntu/data/new-api:/data ghcr.io/bqizkm01918t/openai-new:latest
+          \`\`\`
+          
+          ### 使用特定版本
+          
+          \`\`\`bash
+          # 使用特定版本（推荐）
+          docker run --name new-api -d --restart always -p 3000:3000 -e TZ=Asia/Shanghai -v /home/ubuntu/data/new-api:/data ghcr.io/bqizkm01918t/openai-new:${{ env.TIMESTAMP }}
           \`\`\`
           
           ### Docker Compose
@@ -210,12 +203,14 @@ jobs:
           - 如需了解原始项目详情，请访问 [calciumion/new-api](https://hub.docker.com/r/calciumion/new-api)
           - 镜像每日自动同步，可能存在延迟
           - 请确保主机目录 \`/home/ubuntu/data/new-api\` 存在且有适当权限
+          - 每次同步会创建一个新的带时间戳的版本标签，确保可以追踪每次同步
           
           ## 📊 统计信息
           
           - **最后同步时间**: ${{ env.IMAGE_CREATED }}
           - **同步触发方式**: ${{ env.TRIGGER_TYPE }}
           - **同步状态**: 成功
+          - **当前版本**: ${{ env.TIMESTAMP }}
           
           ---
           
@@ -236,5 +231,6 @@ jobs:
         run: |
           echo "🎉 同步完成！"
           echo "📍 镜像地址: ghcr.io/bqizkm01918t/openai-new:latest"
+          echo "📍 版本镜像: ghcr.io/bqizkm01918t/openai-new:${{ env.TIMESTAMP }}"
           echo "📅 完成时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
           echo "🔄 触发方式: ${{ env.TRIGGER_TYPE }}"
