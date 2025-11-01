@@ -1,3 +1,4 @@
+# .github/workflows/sync-openai-new.yml
 name: 🚀 自动同步 calciumion/new-api 到 GHCR
 
 on:
@@ -51,7 +52,8 @@ jobs:
       - name: 📦 强制拉取 Docker Hub 上的最新镜像
         run: |
           echo "📦 正在强制拉取最新镜像: calciumion/new-api:latest"
-          docker pull --no-cache calciumion/new-api:latest
+          # 使用正确的docker pull命令（不支持--no-cache参数）
+          docker pull calciumion/new-api:latest
           echo "✅ 拉取成功！"
           
           # 获取源镜像的摘要信息用于验证
