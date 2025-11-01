@@ -10,27 +10,30 @@
 - **镜像大小**: 68.4MB
 - **源镜像**: `calciumion/new-api:latest`
 - **同步频率**: 每日自动同步 (北京时间上午 10 点)
+- **源镜像摘要**: calciumion/new-api@sha256:d9a10b4f0f45a16cafc16ed96ff116b8087373185b00e6e76b9d2a0334ba29b0
 
 ## 📅 同步记录
 
 | 同步时间 | 触发方式 | 状态 |
 |----------|----------|------|
-| 2025-11-01 07:57:43 UTC | 手动触发 | ✅ 成功 |
+| 2025-11-01 08:04:28 UTC | 手动触发 | ✅ 成功 |
 
 ## 🔄 同步流程
 
-1. 从 Docker Hub 拉取最新 `calciumion/new-api` 镜像
-2. 重新标记为 `ghcr.io/bqizkm01918t/openai-new`
-3. 推送到 GitHub Container Registry
-4. 更新本 README 文件
+1. 清理本地Docker缓存
+2. 从 Docker Hub 强制拉取最新 `calciumion/new-api` 镜像
+3. 重新标记为 `ghcr.io/bqizkm01918t/openai-new`
+4. 推送到 GitHub Container Registry
+5. 验证镜像是否成功推送
+6. 更新本 README 文件
 
 ## 📦 使用方法
 
-### Docker 命令
+### 使用 SQLite 数据库
 
 ```bash
-docker pull ghcr.io/bqizkm01918t/openai-new:latest
-docker run -d --name openai-new -p 3000:3000 ghcr.io/bqizkm01918t/openai-new:latest
+# 使用SQLite
+docker run --name new-api -d --restart always -p 3000:3000 -e TZ=Asia/Shanghai -v /home/ubuntu/data/new-api:/data ghcr.io/bqizkm01918t/openai-new:latest
 ```
 
 ### Docker Compose
@@ -40,17 +43,29 @@ version: '3'
 services:
   openai-new:
     image: ghcr.io/bqizkm01918t/openai-new:latest
-    container_name: openai-new
+    container_name: new-api
+    restart: always
     ports:
       - "3000:3000"
-    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - /home/ubuntu/data/new-api:/data
 ```
+
+## ⚙️ 配置说明
+
+- **端口映射**: 容器内 3000 端口映射到主机 3000 端口
+- **时区设置**: 设置为亚洲/上海时区
+- **数据持久化**: 主机目录 `/home/ubuntu/data/new-api` 挂载到容器内 `/data` 目录
+- **自动重启**: 容器异常退出时自动重启
 
 ## ⚠️ 注意事项
 
 - 本镜像仅作同步用途，请勿用于生产环境
 - 如需了解原始项目详情，请访问 [calciumion/new-api](https://hub.docker.com/r/calciumion/new-api)
 - 镜像每日自动同步，可能存在延迟
+- 请确保主机目录 `/home/ubuntu/data/new-api` 存在且有适当权限
 
 ## 📊 统计信息
 
