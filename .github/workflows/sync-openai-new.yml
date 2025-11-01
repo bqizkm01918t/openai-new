@@ -40,11 +40,24 @@ jobs:
         id: login
         continue-on-error: false
 
-      - name: 📦 拉取 Docker Hub 上的最新镜像
+      - name: 🗑️ 清理本地缓存
         run: |
-          echo "📦 正在拉取: calciumion/new-api:latest"
-          docker pull calciumion/new-api:latest
+          echo "🗑️ 清理本地Docker缓存以确保获取最新镜像..."
+          docker system prune -f
+          docker rmi ghcr.io/bqizkm01918t/openai-new:latest 2>/dev/null || true
+          docker rmi calciumion/new-api:latest 2>/dev/null || true
+          echo "✅ 清理完成"
+
+      - name: 📦 强制拉取 Docker Hub 上的最新镜像
+        run: |
+          echo "📦 正在强制拉取最新镜像: calciumion/new-api:latest"
+          docker pull --no-cache calciumion/new-api:latest
           echo "✅ 拉取成功！"
+          
+          # 获取源镜像的摘要信息用于验证
+          SOURCE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' calciumion/new-api:latest)
+          echo "源镜像摘要: $SOURCE_DIGEST"
+          echo "SOURCE_DIGEST=$SOURCE_DIGEST" >> $GITHUB_ENV
 
       - name: 🏷️ 重命名镜像为 openai-new
         run: |
@@ -60,10 +73,20 @@ jobs:
 
       - name: 🧪 验证镜像是否推送成功
         run: |
-          echo "🔍 验证镜像是否存在..."
+          echo "🔍 验证镜像是否成功推送到GHCR..."
+          
+          # 清除本地缓存，然后从GHCR拉取镜像进行验证
+          docker rmi ghcr.io/bqizkm01918t/openai-new:latest 2>/dev/null || true
+          docker pull ghcr.io/bqizkm01918t/openai-new:latest
+          
+          # 获取推送后镜像的摘要信息
+          PUSHED_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/bqizkm01918t/openai-new:latest)
+          echo "推送后镜像摘要: $PUSHED_DIGEST"
+          
+          # 验证镜像是否存在
           docker images | grep -E 'bqizkm01918t/openai-new'
           if [ $? -eq 0 ]; then
-            echo "✅ 验证通过：镜像已存在本地缓存中。"
+            echo "✅ 验证通过：镜像已成功推送到GHCR并可以拉取。"
           else
             echo "❌ 验证失败：镜像未找到！"
             exit 1
@@ -100,6 +123,7 @@ jobs:
           - **镜像大小**: ${{ env.IMAGE_SIZE }}
           - **源镜像**: \`calciumion/new-api:latest\`
           - **同步频率**: 每日自动同步 (北京时间上午 10 点)
+          - **源镜像摘要**: ${{ env.SOURCE_DIGEST }}
           
           ## 📅 同步记录
           
@@ -109,18 +133,20 @@ jobs:
           
           ## 🔄 同步流程
           
-          1. 从 Docker Hub 拉取最新 \`calciumion/new-api\` 镜像
-          2. 重新标记为 \`ghcr.io/bqizkm01918t/openai-new\`
-          3. 推送到 GitHub Container Registry
-          4. 更新本 README 文件
+          1. 清理本地Docker缓存
+          2. 从 Docker Hub 强制拉取最新 \`calciumion/new-api\` 镜像
+          3. 重新标记为 \`ghcr.io/bqizkm01918t/openai-new\`
+          4. 推送到 GitHub Container Registry
+          5. 验证镜像是否成功推送
+          6. 更新本 README 文件
           
           ## 📦 使用方法
           
-          ### Docker 命令
+          ### 使用 SQLite 数据库
           
           \`\`\`bash
-          docker pull ghcr.io/bqizkm01918t/openai-new:latest
-          docker run -d --name openai-new -p 3000:3000 ghcr.io/bqizkm01918t/openai-new:latest
+          # 使用SQLite
+          docker run --name new-api -d --restart always -p 3000:3000 -e TZ=Asia/Shanghai -v /home/ubuntu/data/new-api:/data ghcr.io/bqizkm01918t/openai-new:latest
           \`\`\`
           
           ### Docker Compose
@@ -130,17 +156,29 @@ jobs:
           services:
             openai-new:
               image: ghcr.io/bqizkm01918t/openai-new:latest
-              container_name: openai-new
+              container_name: new-api
+              restart: always
               ports:
                 - "3000:3000"
-              restart: unless-stopped
+              environment:
+                - TZ=Asia/Shanghai
+              volumes:
+                - /home/ubuntu/data/new-api:/data
           \`\`\`
+          
+          ## ⚙️ 配置说明
+          
+          - **端口映射**: 容器内 3000 端口映射到主机 3000 端口
+          - **时区设置**: 设置为亚洲/上海时区
+          - **数据持久化**: 主机目录 \`/home/ubuntu/data/new-api\` 挂载到容器内 \`/data\` 目录
+          - **自动重启**: 容器异常退出时自动重启
           
           ## ⚠️ 注意事项
           
           - 本镜像仅作同步用途，请勿用于生产环境
           - 如需了解原始项目详情，请访问 [calciumion/new-api](https://hub.docker.com/r/calciumion/new-api)
           - 镜像每日自动同步，可能存在延迟
+          - 请确保主机目录 \`/home/ubuntu/data/new-api\` 存在且有适当权限
           
           ## 📊 统计信息
           
