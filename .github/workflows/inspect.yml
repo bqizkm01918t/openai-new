@@ -1,0 +1,86 @@
+# .github/workflows/inspect.yml
+name: 🔍 Inspect Runner Environment
+
+# 手动触发，并提供一个选项来控制是否打码
+on:
+  workflow_dispatch:
+    inputs:
+      mask_sensitive_data:
+        description: '打码敏感数据 (IP, TOKEN, KEY 等) 以便分享'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 步骤 1: 检出代码，这是标准操作
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      # 步骤 2: 显示系统和 Runner 信息
+      - name: 2. System & Runner Info
+        run: |
+          echo "========== System & Runner Info =========="
+          echo "OS: $(uname -a)"
+          echo "User: $(whoami)"
+          echo "Hostname: $(hostname)"
+          echo "Current Directory: $(pwd)"
+          echo "Disk Space:"
+          df -h
+          echo "Memory:"
+          free -h
+          echo "------------------------------------------"
+          # 根据输入决定是否显示公网 IP
+          if [ "${{ github.event.inputs.mask_sensitive_data }}" == "true" ]; then
+            echo "Public IP: [MASKED for sharing]"
+          else
+            echo "Public IP: $(curl -s ifconfig.me)"
+          fi
+          echo "=========================================="
+
+      # 步骤 3: 显示所有环境变量
+      - name: 3. All Environment Variables
+        run: |
+          echo "========== All Environment Variables =========="
+          # 根据输入决定是否过滤敏感变量
+          if [ "${{ github.event.inputs.mask_sensitive_data }}" == "true" ]; then
+            echo "Filtering out variables with sensitive keywords..."
+            # 使用 grep -v 来反向过滤掉包含敏感词的行
+            # -E 表示使用扩展正则表达式, -i 表示忽略大小写
+            env | grep -vE -i "(TOKEN|KEY|SECRET|PASSWORD|SIGNATURE)"
+          else
+            echo "Showing all variables without filtering..."
+            env
+          fi
+          echo "================================================"
+
+      # 步骤 4: 显示 GitHub Context 的完整内容
+      - name: 4. GitHub Context (JSON)
+        run: |
+          echo "========== GitHub Context =========="
+          # 使用 toJSON 函数将整个 github 对象以格式化的 JSON 输出
+          # 这包含了触发事件、仓库信息、actor、ref 等所有上下文
+          echo '${{ toJSON(github) }}'
+          echo "===================================="
+
+      # 步骤 5: 演示如何安全地处理 Secrets
+      # 这个步骤旨在演示如何确认 secret 存在且可用，而不暴露其值
+      - name: 5. Handling Secrets (Safe Demo)
+        env:
+          # 为了演示，请先在你的仓库 Settings > Secrets and variables > Actions
+          # 中添加一个名为 "MY_SECRET" 的 repository secret
+          MY_SECRET: ${{ secrets.MY_SECRET }}
+        run: |
+          echo "========== Secrets Handling Demo =========="
+          if [[ -z "$MY_SECRET" ]]; then
+            echo "MY_SECRET is not set or is empty."
+          else
+            # 我们只显示 secret 的长度，证明它已被成功加载，但绝不打印其内容
+            # 即使你尝试 echo $MY_SECRET，GitHub 也会自动将其打码为 ***
+            echo "MY_SECRET is successfully loaded."
+            echo "Length of MY_SECRET: $(echo -n "$MY_SECRET" | wc -c) characters."
+          fi
+          echo "==========================================="
