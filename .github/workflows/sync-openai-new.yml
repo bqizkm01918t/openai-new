@@ -1,130 +1,182 @@
 # .github/workflows/sync-openai-new.yml
-name: 🚀 自动同步镜像并更新 README
+name: 🚀 自动同步 calciumion/new-api 到 GHCR
 
 on:
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch:  # 手动触发
   schedule:
-    - cron: '0 2 * * *'  # 每天 UTC 2 点自动执行
+    - cron: '0 2 * * *'  # 每天凌晨 2 点（北京时间上午 10 点）自动同步
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
-      packages: write
-      contents: write  # 允许推送 README
+      packages: write  # 必需：允许推送镜像到 GHCR
+      contents: write  # 必需：允许更新README文件
 
     steps:
-      - name: 🛠️ 检出仓库代码（确保 Actions 上下文正确）
+      - name: 🛠️ 准备环境
+        run: |
+          echo "✅ 开始同步流程..."
+          echo "⏰ 当前时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          
+      - name: 📥 检出仓库
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🔍 识别触发方式
-        id: trigger
-        run: |
-          EVENT="${{ github.event_name }}"
-          if [ "$EVENT" == "schedule" ]; then
-            echo "type=自动定时执行" >> $GITHUB_OUTPUT
-            echo "icon=🕒" >> $GITHUB_OUTPUT
-          elif [ "$EVENT" == "workflow_dispatch" ]; then
-            echo "type=手动触发" >> $GITHUB_OUTPUT
-            echo "icon=🖱️" >> $GITHUB_OUTPUT
-          else
-            echo "type=其他方式 ($EVENT)" >> $GITHUB_OUTPUT
-            echo "icon=❓" >> $GITHUB_OUTPUT
-          fi
-          echo "event=$EVENT" >> $GITHUB_OUTPUT
-
-      - name: 🕒 获取当前时间
-        id: time
-        run: |
-          echo "now=$(date '+%Y年%m月%d日 %H:%M:%S %Z')" >> $GITHUB_OUTPUT
-          echo "utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
-
-      - name: 🔐 登录 GHCR
+          
+      - name: 🔐 登录到 GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: login
+        continue-on-error: false
 
-      - name: 📦 拉取源镜像 (calciumion/new-api:latest)
-        id: pull
+      - name: 📦 拉取 Docker Hub 上的最新镜像
         run: |
-          echo "📥 正在拉取镜像: calciumion/new-api:latest"
+          echo "📦 正在拉取: calciumion/new-api:latest"
           docker pull calciumion/new-api:latest
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' calciumion/new-api:latest 2>/dev/null || echo "N/A")
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "✅ 拉取成功！镜像摘要: $DIGEST"
-
-      - name: 🏷️ 重命名并推送到 GHCR
-        run: |
-          echo "🔄 重命名并推送至 ghcr.io/bqizkm01918t/openai-new:latest"
-          docker tag calciumion/new-api:latest ghcr.io/bqizkm01918t/openai-new:latest
-          docker push ghcr.io/bqizkm01918t/openai-new:latest
-          echo "📤 推送完成！"
-
-      - name: 📝 生成详细的中文 README.md
-        run: |
-          cat > README.md << EOF
-# 🔄 镜像自动同步状态
-
-本仓库自动将 Docker Hub 镜像 \`calciumion/new-api:latest\` 同步至 GitHub Container Registry，并重命名为 \`openai-new\`。
-
----
-
-## 📌 最新同步信息
-
-| 项目 | 内容 |
-|------|------|
-| **触发方式** | ${{ steps.trigger.outputs.icon }} **${{ steps.trigger.outputs.type }}** |
-| **同步时间** | ${{ steps.time.outputs.now }} |
-| **UTC 时间** | ${{ steps.time.outputs.utc }} |
-| **GitHub 事件类型** | \`${{ steps.trigger.outputs.event }}\` |
-| **源镜像** | \`docker.io/calciumion/new-api:latest\` |
-| **目标镜像** | \`ghcr.io/bqizkm01918t/openai-new:latest\` |
-| **镜像摘要 (Digest)** | \`${{ steps.pull.outputs.digest }}\` |
-| **状态** | ✅ **同步成功** |
-
----
-
-## 🐳 使用方式
-
-\`\`\`bash
-# 拉取镜像
-docker pull ghcr.io/bqizkm01918t/openai-new:latest
-\`\`\`
-
-> 💡 镜像每日自动更新（UTC 02:00）。如需公开访问，请在 GitHub Packages 中将该镜像设为 **Public**。
-
----
-
-## 📅 自动同步计划
-
-- **定时任务**：每天一次（UTC 02:00，北京时间 10:00）
-- **工作流文件**：[\`.github/workflows/sync-openai-new.yml\`](.github/workflows/sync-openai-new.yml)
-- **仓库**：[${{ github.repository }}](https://github.com/${{ github.repository }})
-
----
-
-> 🕒 本页面由 GitHub Actions 自动更新于：${{ steps.time.outputs.now }}
-
-EOF
-
-      - name: 📤 提交并推送 README
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          echo "✅ 拉取成功！"
           
-          git add README.md
-          # 仅当 README 有变化时才提交
-          if ! git diff --quiet HEAD -- README.md; then
-            git commit -m "📝 自动更新镜像状态 [${{ steps.trigger.outputs.type }} @ ${{ steps.time.outputs.utc }}]"
-            git push
-            echo "✅ README 已推送更新。"
+      - name: 🏷️ 获取镜像信息
+        id: image-info
+        run: |
+          # 获取镜像创建时间
+          IMAGE_CREATED=$(docker inspect calciumion/new-api:latest --format='{{.Created}}')
+          # 获取镜像大小
+          IMAGE_SIZE=$(docker inspect calciumion/new-api:latest --format='{{.Size}}')
+          # 转换大小为MB
+          IMAGE_SIZE_MB=$(echo "scale=2; $IMAGE_SIZE / 1024 / 1024" | bc)
+          # 获取镜像ID
+          IMAGE_ID=$(docker inspect calciumion/new-api:latest --format='{{.Id}}' | cut -d: -f2 | cut -c1-12)
+          
+          echo "created=$IMAGE_CREATED" >> $GITHUB_OUTPUT
+          echo "size_mb=$IMAGE_SIZE_MB" >> $GITHUB_OUTPUT
+          echo "id=$IMAGE_ID" >> $GITHUB_OUTPUT
+          
+          echo "📋 镜像信息:"
+          echo "  创建时间: $IMAGE_CREATED"
+          echo "  大小: $IMAGE_SIZE_MB MB"
+          echo "  ID: $IMAGE_ID"
+
+      - name: 🏷️ 重命名镜像为 openai-new
+        run: |
+          echo "🔄 重命名镜像: calciumion/new-api -> ghcr.io/${{ github.repository_owner }}/openai-new"
+          docker tag calciumion/new-api:latest ghcr.io/${{ github.repository_owner }}/openai-new:latest
+          echo "✅ 重命名完成！"
+
+      - name: 🚀 推送镜像到 GHCR
+        run: |
+          echo "📤 正在推送: ghcr.io/${{ github.repository_owner }}/openai-new:latest"
+          docker push ghcr.io/${{ github.repository_owner }}/openai-new:latest
+          echo "✅ 推送完成！镜像已覆盖更新。"
+
+      - name: 🧪 验证镜像是否推送成功
+        run: |
+          echo "🔍 验证镜像是否存在..."
+          docker images | grep -E '${{ github.repository_owner }}/openai-new'
+          if [ $? -eq 0 ]; then
+            echo "✅ 验证通过：镜像已存在本地缓存中。"
           else
-            echo "ℹ️ README 无变化，跳过提交。"
+            echo "❌ 验证失败：镜像未找到！"
+            exit 1
           fi
 
-      - name: ✅ 完成
-        run: echo "🎉 同步与文档更新全部完成！"
+      - name: 📝 准备日志内容
+        id: log-content
+        run: |
+          # 确定触发方式
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            TRIGGER_TYPE="🤖 自动执行"
+            TRIGGER_ICON="🕐"
+          else
+            TRIGGER_TYPE="👤 手动触发"
+            TRIGGER_ICON="🔘"
+          fi
+          
+          # 格式化时间
+          CURRENT_TIME=$(date '+%Y-%m-%d %H:%M:%S %Z')
+          IMAGE_CREATED=$(date -d '${{ steps.image-info.outputs.created }}' '+%Y-%m-%d %H:%M:%S %Z')
+          
+          # 创建日志条目
+          LOG_ENTRY="| $CURRENT_TIME | $TRIGGER_TYPE | ${{ steps.image-info.outputs.id }} | ${{ steps.image-info.outputs.size_mb }} MB | $IMAGE_CREATED | [查看日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+          
+          # 保存到输出
+          echo "entry=$LOG_ENTRY" >> $GITHUB_OUTPUT
+          echo "trigger_type=$TRIGGER_TYPE" >> $GITHUB_OUTPUT
+          echo "trigger_icon=$TRIGGER_ICON" >> $GITHUB_OUTPUT
+          
+          echo "📝 日志条目已准备:"
+          echo "$LOG_ENTRY"
+
+      - name: 📄 更新README文件
+        run: |
+          # 获取当前README内容
+          README_CONTENT=$(cat README.md)
+          
+          # 检查是否存在日志表格
+          if [[ "$README_CONTENT" == *"## 📋 同步日志"* ]]; then
+            echo "📄 README中已存在日志表格，将更新..."
+            
+            # 提取表格之前的内容
+            TABLE_START=$(echo "$README_CONTENT" | grep -n "## 📋 同步日志" | cut -d: -f1)
+            BEFORE_TABLE=$(echo "$README_CONTENT" | head -n $((TABLE_START-1)))
+            
+            # 提取表格之后的内容
+            TABLE_END=$(echo "$README_CONTENT" | grep -n "## " | grep -A1 -n "## 📋 同步日志" | tail -1 | cut -d: -f1)
+            if [ -z "$TABLE_END" ]; then
+              AFTER_TABLE=""
+            else
+              AFTER_TABLE=$(echo "$README_CONTENT" | tail -n +$TABLE_END)
+            fi
+            
+            # 创建新的表格内容
+            NEW_TABLE="## 📋 同步日志
+            
+| 时间 | 触发方式 | 镜像ID | 大小 | 原始创建时间 | 详细日志 |
+|------|--------|--------|------|------------|----------|
+ ${{ steps.log-content.outputs.entry }}
+"
+            
+            # 组合新的README内容
+            NEW_README="$BEFORE_TABLE
+ $NEW_TABLE
+ $AFTER_TABLE"
+          else
+            echo "📄 README中不存在日志表格，将创建..."
+            
+            # 在README末尾添加日志表格
+            NEW_README="$README_CONTENT
+
+## 📋 同步日志
+
+| 时间 | 触发方式 | 镜像ID | 大小 | 原始创建时间 | 详细日志 |
+|------|--------|--------|------|------------|----------|
+ ${{ steps.log-content.outputs.entry }}
+"
+          fi
+          
+          # 写入新的README内容
+          echo "$NEW_README" > README.md
+          
+          echo "✅ README文件已更新"
+
+      - name: 🚀 提交并推送更改
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git commit -m "📝 更新同步日志 - ${{ steps.log-content.outputs.trigger_type }} @ $(date '+%Y-%m-%d %H:%M:%S')"
+          git push
+          
+          echo "✅ 更改已提交并推送到仓库"
+
+      - name: 📝 输出最终镜像地址
+        run: |
+          echo "🎉 同步完成！"
+          echo "📍 镜像地址: ghcr.io/${{ github.repository_owner }}/openai-new:latest"
+          echo "📅 完成时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          echo "🔗 查看详细日志: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
