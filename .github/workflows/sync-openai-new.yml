@@ -12,6 +12,8 @@ jobs:
     permissions:
       packages: write  # 必需：允许推送镜像到 GHCR
       contents: write  # 必需：允许更新README文件
+      # 添加删除包的权限
+      packages: delete
 
     steps:
       - name: 🛠️ 准备环境
@@ -40,6 +42,33 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         id: login
         continue-on-error: false
+
+      - name: 🗑️ 删除GHCR上的所有镜像版本
+        run: |
+          echo "🗑️ 正在删除GHCR上的所有镜像版本..."
+          
+          # 安装gh CLI
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+          
+          # 登录gh CLI
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+          
+          # 获取所有包版本并删除
+          PACKAGE_ID=$(gh api graphql -f query='query{repository(owner:"${{ github.repository_owner }}", name:"openai-new"){package(name:"openai-new"){id}}}' --jq '.data.repository.package.id')
+          echo "Package ID: $PACKAGE_ID"
+          
+          # 获取所有版本
+          VERSIONS=$(gh api graphql -f query="query{node(id:\"$PACKAGE_ID\"){... on Package{versions(first:100){nodes{id,version}}}}}" --jq '.data.node.versions.nodes[].id')
+          
+          for VERSION_ID in $VERSIONS; do
+            echo "删除版本ID: $VERSION_ID"
+            gh api --method DELETE "/packages/${{ github.repository_owner }}/openai-new/versions/$VERSION_ID" || true
+          done
+          
+          echo "✅ 所有旧版本已删除"
 
       - name: 🗑️ 清理本地缓存
         run: |
@@ -135,12 +164,13 @@ jobs:
           
           ## 🔄 同步流程
           
-          1. 清理本地Docker缓存
-          2. 从 Docker Hub 强制拉取最新 \`calciumion/new-api\` 镜像
-          3. 重新标记为 \`ghcr.io/bqizkm01918t/openai-new\`
-          4. 推送到 GitHub Container Registry
-          5. 验证镜像是否成功推送
-          6. 更新本 README 文件
+          1. 删除GHCR上的所有旧版本镜像
+          2. 清理本地Docker缓存
+          3. 从 Docker Hub 强制拉取最新 \`calciumion/new-api\` 镜像
+          4. 重新标记为 \`ghcr.io/bqizkm01918t/openai-new\`
+          5. 推送到 GitHub Container Registry
+          6. 验证镜像是否成功推送
+          7. 更新本 README 文件
           
           ## 📦 使用方法
           
