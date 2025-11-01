@@ -1,35 +1,65 @@
 # .github/workflows/sync-openai-new.yml
-name: Sync to GHCR as openai-new
+name: 🚀 自动同步 calciumion/new-api 到 GHCR
 
 on:
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch:  # 手动触发
   schedule:
-    - cron: '0 2 * * *'  # 每天 UTC 时间凌晨 2 点自动同步一次
+    - cron: '0 2 * * *'  # 每天凌晨 2 点（北京时间上午 10 点）自动同步
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
-      packages: write  # 必须授权写入 GHCR
+      packages: write  # 必需：允许推送镜像到 GHCR
 
     steps:
-      - name: Login to GHCR
+      - name: 🛠️ 准备环境
+        run: |
+          echo "✅ 开始同步流程..."
+          echo "⏰ 当前时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+
+      - name: 🔐 登录到 GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # 安全！GitHub 自动提供
+          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: login
+        continue-on-error: false
 
-      - name: Pull from Docker Hub and Push to GHCR
+      - name: 📦 拉取 Docker Hub 上的最新镜像
         run: |
-          # 拉取原始镜像
+          echo "📦 正在拉取: calciumion/new-api:latest"
           docker pull calciumion/new-api:latest
-          
-          # 重命名为你想要的名字：openai-new
-          docker tag calciumion/new-api:latest ghcr.io/bqizkm01918t/openai-new:latest
-          
-          # 推送到 GHCR（自动覆盖 latest）
-          docker push ghcr.io/bqizkm01918t/openai-new:latest
+          echo "✅ 拉取成功！"
 
-      - name: Report success
-        run: echo "✅ Synced to ghcr.io/bqizkm01918t/openai-new:latest"
+      - name: 🏷️ 重命名镜像为 openai-new
+        run: |
+          echo "🔄 重命名镜像: calciumion/new-api -> ghcr.io/bqizkm01918t/openai-new"
+          docker tag calciumion/new-api:latest ghcr.io/bqizkm01918t/openai-new:latest
+          echo "✅ 重命名完成！"
+
+      - name: 🚀 推送镜像到 GHCR
+        run: |
+          echo "📤 正在推送: ghcr.io/bqizkm01918t/openai-new:latest"
+          docker push ghcr.io/bqizkm01918t/openai-new:latest
+          echo "✅ 推送完成！镜像已覆盖更新。"
+
+      - name: 🧪 验证镜像是否推送成功
+        run: |
+          echo "🔍 验证镜像是否存在..."
+          docker images | grep -E 'bqizkm01918t/openai-new'
+          if [ $? -eq 0 ]; then
+            echo "✅ 验证通过：镜像已存在本地缓存中。"
+          else
+            echo "❌ 验证失败：镜像未找到！"
+            exit 1
+          fi
+
+      - name: 📝 输出最终镜像地址
+        run: |
+          echo "🎉 同步完成！"
+          echo "📍 镜像地址: ghcr.io/bqizkm01918t/openai-new:latest"
+          echo "📅 完成时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
