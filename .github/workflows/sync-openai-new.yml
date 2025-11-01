@@ -1,5 +1,5 @@
 # .github/workflows/sync-openai-new.yml
-name: 🚀 自动同步 calciumion/new-api 到 GHCR
+name: 🚀 自动同步 calciumion/new-api 到 GHCR 并更新日志
 
 on:
   workflow_dispatch:  # 手动触发
@@ -10,6 +10,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
+      contents: write  # 必需：允许修改 README
       packages: write  # 必需：允许推送镜像到 GHCR
 
     steps:
@@ -17,6 +18,13 @@ jobs:
         run: |
           echo "✅ 开始同步流程..."
           echo "⏰ 当前时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+          echo "START_TIME=$START_TIME" >> $GITHUB_ENV
+
+      - name: 📥 检出仓库代码
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🔐 登录到 GHCR
         uses: docker/login-action@v3
@@ -24,8 +32,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         id: login
         continue-on-error: false
 
@@ -56,6 +62,68 @@ jobs:
           else
             echo "❌ 验证失败：镜像未找到！"
             exit 1
+          fi
+
+      - name: 📊 获取镜像信息
+        run: |
+          echo "📊 获取镜像详情..."
+          IMAGE_DIGEST=$(docker inspect calciumion/new-api:latest --format='{{.Id}}' | cut -c1-12)
+          echo "SOURCE_IMAGE_DIGEST=$IMAGE_DIGEST" >> $GITHUB_ENV
+          echo "✅ 源镜像短摘要: $IMAGE_DIGEST"
+
+      - name: 📝 更新 README.md 日志
+        run: |
+          # 读取当前 README 内容
+          README_FILE="README.md"
+          
+          # 如果 README 不存在，创建一个
+          if [ ! -f "$README_FILE" ]; then
+            echo "# 📦 OpenAI New 镜像同步日志" > "$README_FILE"
+            echo "" >> "$README_FILE"
+            echo "此仓库用于自动同步 \`calciumion/new-api:latest\` 到 \`ghcr.io/bqizkm01918t/openai-new:latest\`" >> "$README_FILE"
+            echo "" >> "$README_FILE"
+          fi
+          
+          # 构建新的日志条目
+          NEW_LOG_ENTRY="
+### 📅 同步时间: ${{ env.START_TIME }}
+
+- **状态**: ✅ 成功
+- **源镜像**: \`calciumion/new-api:latest\`
+- **目标镜像**: \`ghcr.io/bqizkm01918t/openai-new:latest\`
+- **源镜像摘要**: \`${{ env.SOURCE_IMAGE_DIGEST }}...\`
+- **操作**: 🔄 覆盖更新 latest 标签
+- **触发方式**: ${{ github.event_name == 'schedule' && '定时任务' || '手动触发' }}
+
+---
+
+"
+          
+          # 在 README 开头插入新日志（保持最近 10 条）
+          {
+            echo "# 📦 OpenAI New 镜像同步日志"
+            echo ""
+            echo "此仓库用于自动同步 \`calciumion/new-api:latest\` 到 \`ghcr.io/bqizkm01918t/openai-new:latest\`"
+            echo ""
+            echo "## 📋 最新同步日志"
+            echo ""
+            echo "$NEW_LOG_ENTRY"
+            
+            # 读取旧日志（跳过标题部分）
+            sed -n '/## 📋 最新同步日志/,$p' "$README_FILE" | sed '1d' | head -n 20
+          } > "$README_FILE.tmp" && mv "$README_FILE.tmp" "$README_FILE"
+
+      - name: 📤 提交 README 更新
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          if git diff --staged --quiet; then
+            echo "⚠️ 未发现 README 变更，跳过提交。"
+          else
+            git commit -m "📝 更新同步日志 - $(date '+%Y-%m-%d %H:%M:%S')"
+            git push
+            echo "✅ README 已更新并推送。"
           fi
 
       - name: 📝 输出最终镜像地址
