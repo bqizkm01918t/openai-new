@@ -1,0 +1,9 @@
+[
+  {
+    "tag": "v1",
+    "timestamp": "20251101140201",
+    "readable_time": "2025-11-01 14:02:01",
+    "source_digest": "calciumion/new-api@sha256:d9a10b4f0f45a16cafc16ed96ff116b8087373185b00e6e76b9d2a0334ba29b0",
+    "trigger_type": "手动触发"
+  }
+]
