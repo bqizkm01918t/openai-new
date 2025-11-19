@@ -1,5 +1,12 @@
 [
   {
+    "tag": "v18",
+    "timestamp": "20251119030607",
+    "readable_time": "2025-11-19 03:06:07",
+    "source_digest": "calciumion/new-api@sha256:09a68ba47f6f8ab9f5da14d154bf42e797ee815b59d2654b40ae73c0498c243b",
+    "trigger_type": "自动执行"
+  },
+  {
     "tag": "v17",
     "timestamp": "20251118030634",
     "readable_time": "2025-11-18 03:06:34",
