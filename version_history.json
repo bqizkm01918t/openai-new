@@ -1,5 +1,12 @@
 [
   {
+    "tag": "v6",
+    "timestamp": "20251127030514",
+    "readable_time": "2025-11-27 03:05:14",
+    "source_digest": "calciumion/new-api@sha256:4d5272c247c83df50511c1d2942269d9656c2f4688d3676a728a30e348269799",
+    "trigger_type": "自动执行"
+  },
+  {
     "tag": "v5",
     "timestamp": "20251126030847",
     "readable_time": "2025-11-26 03:08:47",
@@ -130,13 +137,6 @@
     "timestamp": "20251107030510",
     "readable_time": "2025-11-07 03:05:10",
     "source_digest": "calciumion/new-api@sha256:f9b01116d6845cf9713ec88e05b0cef5852fad6d52085fa9e8686f280c9a86a0",
-    "trigger_type": "自动执行"
-  },
-  {
-    "tag": "v6",
-    "timestamp": "20251106030804",
-    "readable_time": "2025-11-06 03:08:04",
-    "source_digest": "calciumion/new-api@sha256:2ffabbc79598ae16e926d0750758559d5352f49eb19e22ff192d76f8b80b1bd6",
     "trigger_type": "自动执行"
   }
 ]
